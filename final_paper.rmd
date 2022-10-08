@@ -6,7 +6,7 @@ author: |
   | Kaleb Cervantes
   | Nikhil Taringonda
   
-date: "October 7 2022"
+date: "October 7, 2022"
 
 output:
   pdf_document:
@@ -29,17 +29,17 @@ knitr::opts_chunk$set(
 library(tidyverse)
 ```
 
-What attributes of Pokemon make them harder to catch?
+What categorical attributes of Pokemon make them harder to catch?
 \newline
 
-Fortunately, Kaggle user Rounak Banik scraped data from serebii.net in 2017 to make "The Complete Pokemon Dataset". The dataset contains a lot of information for Pokemon in the mobile game *Pokemon Go*. Now, this dataset technically is not a "complete" Pokemon dataset as of the time this project was done. This is because since the data was scraped, there has been an entire Generation of Pokemon games that have been released.
+Fortunately, Kaggle user Rounak Banik scraped data from serebii.net in 2017 to make ["The Complete Pokemon Dataset"](https://www.kaggle.com/datasets/rounakbanik/pokemon). The dataset contains a lot of information about Pokemon in the mobile game *Pokemon Go*. Now, this dataset technically is not a "complete" Pokemon dataset as of the time this project was done. This is because since the data was scraped, there has been an entire Generation of Pokemon games that have been released.
 \newline
 
-We decided to clean the data based on the following:
+Initially, the data contained 801 rows and 41 columns. With the exception of one column and two rows, the data was in a tidy format. Not all of the columns would be necessary for this project, so we decided to clean the data based on the following:
 
 * The resulting tibble should be in a tidy format.
 
-* Only one unique identifier column is needed
+* Only one unique identifier column is needed.
 
 * Categorical variables should be stored as factors with up to 15 different levels.
 
@@ -91,13 +91,15 @@ The resulting tibble had 800 rows and 19 columns. Seven of these columns were of
 
   8-bit integer column that is used to calculate the probability that a Pokemon is caught.
   
+  Higher capture rates correspond to a Pokemon being easier to catch while lower capture rates correspond to a Pokemon being more difficult to catch.
+  
 * `name`
 
   Character column containing the Pokemon's official English name. This is also a unique identifier.
   
 * `type1`, `type2`
 
-  Character columns representing the primary and secondary types of the pokemon respectively.
+  Character columns represent the primary and secondary types of the pokemon respectively.
   
 * `generation`
 
@@ -109,7 +111,48 @@ The resulting tibble had 800 rows and 19 columns. Seven of these columns were of
   
 * `classification`
 
-  Character column that describes biological characteristics of the Pokemon.
+  Character column that describes the biological characteristics of the Pokemon.
+  
+  The raw data contained many classifications that were sub-classifications of others. In these cases, the primary classification was used. Pokemon with multiple classifications had their first listed classification used for this project. Fortunately, all of these situations were able to be simplified with a regular expression.
+  
+Table 1 provides some summary statistics for the capture rates in the data.
+  
+```{r capture_rate}
+
+# gets summary of capture rate column
+pokemon %>%
+  pull(capture_rate) %>%
+  summary() %>%
+  
+  {
+    
+    # adds output from summary function as columns in a dataframe
+    data.frame(
+      names(.),
+      as.vector(.)
+    )
+    
+  } %>%
+  
+  # converts dataframe to table
+  knitr::kable(
+    col.names = c("", ""),
+    caption = r"(Summary Table for `pokemon$capture_rate`)"
+  )
+```
+
+These summary statistics are relevant to why the cleaned dataset has one less observation than the raw data. The row that was removed corresponded to the Pokemon Minior. Minior is a Pokemon with two forms. Each form has a different capture rate. In one form, Minior had a capture rate of 30, which is below the first quartile. In its other form, Minior had a capture rate of 255, which is the maximum value for capture rate. Since this Pokemon had extremely different capture rates depending on form, it was decided that this observation would be removed.
+\newline
+
+```{r minior, results='hide'}
+
+# row that was removed from the raw data
+# shows capture rate from this row
+read_csv("pokemon.csv") %>%
+  filter(name == "Minior") %>%
+  pull(capture_rate)
+```
+
   
 ```{r anova_models, results='hide', fig.show='hide'}
 
@@ -136,16 +179,24 @@ plot(aov2, which = 1)
 car::powerTransform(aov2) %>% summary()
 ```
 
-First, an additive ANOVA model was used to see if there were significant differences in the mean capture rate depending on different categorical attributes of the pokemon. The full model seemed to indiate that the interaction between primary and secondary types --- and the effects of classification --- were not signifcant in their difference of mean capture rate.
+Different methods were used to find which categorical variables have a significant effect on capture rate. First,  ANOVA models --- with significance level $\alpha = 0.05$ --- were used to see if there were significant differences in the mean capture rate depending on categorical variables. The first model used the additive effects of:
+
+* Pokemon generation
+
+* legendary status
+
+* primary and secondary type, as well as their interaction effect
+
+The full model seemed to indicate that the interaction between primary and secondary types --- and the effects of classification --- were not significant in their difference of mean capture rate for $\alpha = 0.05$.
 \newline
 
-After this was done, a reduced ANOVA model was made to just include the additive effect of primary and secondary type, generation, and legendary status. In this model, all of these attributes seemed significant.
+After this was done, a reduced ANOVA model was made to just include the additive effect of primary and secondary type, generation, and legendary status. In this model, all of these attributes seemed significant for $\alpha = 0.05$.
 \newline
 
-When the assumptions for ANOVA were checked, the constant variance and normality assumptions seemed to be violated for both models. In order to find an appropriate transformation, Box-Cox power transformations were used. These resulted in a rounded power of $0.09$ and $0.13$ for the first and second models respectively.
+When the assumptions for ANOVA were checked, the constant variance and normality assumptions seemed to be violated for both models. To find an appropriate transformation, Box-Cox power transformations were used. These resulted in a rounded power of $0.09$ and $0.13$ for the first and second models respectively. This indicated that the results of the ANOVA models may not have been valid.
 \newline
 
-In order to still look at the impact of the columns on capture rate, box-plots were used.
+In order to still look at the impact of the columns on the capture rate, box-plots were used as a visual approach.
 \newline
 
 ```{r unused_boxplots, fig.show='hide'}
@@ -156,22 +207,35 @@ ggplot(pokemon, aes(capture_rate, type2)) + geom_boxplot()
 ggplot(pokemon, aes(capture_rate, generation)) + geom_boxplot()
 ```
 
-```{r legendary, fig.cap="Legendary Status Distribution"}
+
+```{r legendary, fig.cap="Distributions of Capture Rates for Legendary and Non-Legendary Pokemon", out.height="90%", out.width="90%"}
 
 # title is included in figure caption
-ggplot(pokemon, aes(capture_rate, is_legendary, col = is_legendary)) +
+pokemon %>%
+  
+  # change logical to factor to add factor values to plot labels
+  mutate(
+    is_legendary = as.factor(is_legendary) %>%
+      fct_recode(
+        Legendary = "TRUE",
+        `Non-\nLegendary` = "FALSE"
+      )
+  ) %>%
+  
+  # plot modified version of column
+  ggplot(aes(capture_rate, is_legendary, col = is_legendary)) +
   geom_boxplot() +
   theme(legend.position = "none") +
   labs(
     x = "Capture Rate",
-    y = "Whether Pokemon is Legendary"
+    y = "Legendary Status"
   )
 ```
 
 Figure 1 seems to indicate that Legendary Pokemon tend to have significantly capture rates than non-Legendary Pokemon.
 \newline
 
-```{r class, fig.cap="Classification Distribution"}
+```{r class, fig.cap="Distributions of Capture Rates within Classifications", out.height="90%", out.width="90%"}
 
 # title is included in figure caption
 ggplot(pokemon, aes(capture_rate, classification, col = classification)) +
