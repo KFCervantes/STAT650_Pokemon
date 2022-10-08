@@ -159,8 +159,9 @@ ggplot(pokemon, aes(capture_rate, generation)) + geom_boxplot()
 ```{r legendary, fig.cap="Legendary Status Distribution"}
 
 # title is included in figure caption
-ggplot(pokemon, aes(capture_rate, is_legendary)) +
+ggplot(pokemon, aes(capture_rate, is_legendary, col = is_legendary)) +
   geom_boxplot() +
+  theme(legend.position = "none") +
   labs(
     x = "Capture Rate",
     y = "Whether Pokemon is Legendary"
@@ -173,8 +174,10 @@ Figure 1 seems to indicate that Legendary Pokemon tend to have significantly cap
 ```{r class, fig.cap="Classification Distribution"}
 
 # title is included in figure caption
-ggplot(pokemon, aes(capture_rate, classification)) +
+ggplot(pokemon, aes(capture_rate, classification, col = classification)) +
   geom_boxplot() +
+  theme(legend.position = "none") +
+  scale_fill_brewer(palette = "Bupu") +
   labs(
     x = "Capture Rate",
     y = "Pokemon Classification"
