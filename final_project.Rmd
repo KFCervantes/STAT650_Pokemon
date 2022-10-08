@@ -1,0 +1,81 @@
+---
+title: "Pokemon"
+output: pdf_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+In this project, we were interested in seeing what factors affect how easily a pokemon is caught.
+
+In order to do this, a pokemon dataset from Kaggle was used.
+
+The dataset contains a variable called `capture_rate`. It is important to understand what this does. It is encoded as a 8-bit unsigned integer. It may help to understand how this is used. First, a capture value is calculated 
+
+$$
+\text{Capture Value} =
+\frac{
+3\mathrm{HP}_{\max} - 2\mathrm{HP}_\mathrm{current}
+}{
+3\mathrm{HP}_{\max}
+}
+\cdot \text{Catch Rate} \cdot \mathrm{Modifier}_\mathrm{status} \cdot \mathrm{Modifier}_\mathrm{ball}
+$$
+
+Now, If the capture value is at least 255, the catch is guaranteed. Otherwise, the formula below is used to compute some number.
+
+$$
+\text{Catch Value} =
+\left( 2^{20} - 2^4 \right) \left(
+\frac{\text{Capture Value}}{2^{24} - 2^{16}}
+\right)^{1 / 4}
+$$
+
+In order to calculate whether a pokemon is captured, a random 16-bit unsigned integer is generated. If it is less than or equal to the catch value, then the pokemon is caught. Otherwise this is repeat up to two more times. Each of these is called a "shake".
+
+Assuming the randomly generated integer follow a uniform distribution $\text{Catch Value} \cdot 2^{-16}$, the number of failed shakes before a pokemon is caught follows a geometric distribution with probability of success $\frac{\text{Catch Rate}}{2^{16}}$. In this case, a pokemon is caught if the number of failed shakes is at most 2.
+
+Using this process, min and max probabilities of catch were added to the data.
+
+```{r}
+library(tidyverse)
+
+catch_value <- function(max_hp, curr_hp, catch_rate, ball_modifier = 1, status_modifier = 1)
+   (( 3 * max_hp - 2 * curr_hp ) * (catch_rate * ball_modifier) / (3 * max_hp) ) * status_modifier
+
+p_shake <- function(x)
+  ifelse(
+    x < 255, # check if x < 255 element wise
+    (65535 * sqrt(sqrt(x / 255)) * 2^-16), # if so compute probability of success with formula
+    1 # otherwise success
+  )
+
+pokemon <- read_csv("pokemon.csv") %>%
+  filter(name != "Minior") %>%
+  mutate(
+    katakana_name = japanese_name %>% str_extract(r"([^[a-zA-Z0-9?]]+)"),
+    romaji_name = japanese_name %>% str_extract(r"([a-zA-Z0-9?]+)"),
+    capture_rate = as.numeric(capture_rate),
+    p_catch_min = catch_value(hp, hp, capture_rate) %>% p_shake() %>% pgeom(2, .),
+    p_catch_max = catch_value(hp, 1, capture_rate) %>% p_shake() %>% pgeom(2, .),
+    japanese_name = NULL
+  )
+```
+
+Now that this is done, it may help to look at relations between variables.
+
+```{r}
+lml <- lm(
+  p_catch_max ~ poly(sqrt(sqrt(capture_rate)), 3, raw = 3),
+  data = pokemon
+)
+
+summary(lml)
+
+plot(lml)
+```
+
+
+

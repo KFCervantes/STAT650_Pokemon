@@ -1,0 +1,69 @@
+---
+title: "test"
+output: pdf_document
+date: "2022-10-05"
+---
+
+```{r}
+pokemon <- read.csv("cleaned_pokemon.csv")
+```
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+pokemon %>% 
+  ggplot(aes(type1,fill = factor(is_legendary))) + 
+  geom_bar()
+```
+
+```{r}
+library(treemap)
+ 
+# Build Dataset
+#group <- pokemon$type1
+#subgroup <- pokemon$type2
+#value <- data.frame(table(pokemon$type1))
+#data <- data.frame(group,subgroup,value)
+ 
+# treemap
+#treemap(value,
+           # index=names(value),
+            #vSize="Freq",
+          #  type="index",
+        #palette="Set1"
+        #    ) 
+```
+
+```{r}
+pokemon %>%
+  select_if(is.numeric) %>%
+  {
+    data.frame(
+      col_name = names(.),
+      mean = apply(., 2, mean, na.rm = TRUE),
+      std_dev = apply(., 2, sd, na.rm = TRUE)
+    )
+  } %>%
+  mutate(
+    mean = round(mean, 2),
+    std_dev = round(std_dev, 2)
+  ) %>%
+  knitr::kable(
+    row.names = FALSE,
+    col.names = c("Column Name", "Mean", "Standard Deviation")
+  )
+```
+
+
+
+|Variable     | Mean                                     | Standard Deviation                     |
+|-------------|------------------------------------------|----------------------------------------|
+|capture rate |`r mean(pokemon$capture_rate)`            | `r sd(pokemon$capture_rate)`           |
+|attack       |`r mean(pokemon$attack)`                  | `r sd(pokemon$attack)`                 |                           
+|defense      |`r mean(pokemon$defense)`                 | `r sd(pokemon$defense)`                |  
+|hp           |`r mean(pokemon$hp)`                      | `r sd(pokemon$hp)`                     |  
+|height       |`r mean(pokemon$height_m, na.rm = TRUE)`  | `r sd(pokemon$height_m, na.rm = TRUE)` |  
+|weight       |`r mean(pokemon$weight_kg, na.rm = TRUE)` | `r sd(pokemon$weight_kg, na.rm = TRUE)`|
+|speed        |`r mean(pokemon$speed, na.rm = TRUE)`     | `r sd(pokemon$speed, na.rm = TRUE)`    |  

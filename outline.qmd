@@ -1,0 +1,131 @@
+---
+title: "Outline"
+format: pdf
+---
+
+This is supposed to be the outline for the actual project report.
+
+# Introduction
+## Research Question
+Which variables have an impact on the probability of a Pokemon being captured?
+
+## Goals
+<!-- This is a temporary goal -->
+Now the actual probability of a Pokemon being captured is a function of health percentage, capture rate, and some modifiers. Given a fixed health percentage and fixed modifiers, the probability of capture $p_c$ is
+
+$$
+p_c = 1 - \left(1 - a r_c^{1/4} \right)^3
+$$
+
+Where $r_c$ is the capture rate, and $a$ is some constant based on health percentage and modifiers.
+
+In order to visualize the relationship, we can use the following plot.
+
+```{r}
+#| echo: false
+#| warning: false
+library(tidyverse)
+
+catch_value <- function(max_hp, curr_hp, catch_rate, ball_modifier = 1, status_modifier = 1)
+   (( 3 * max_hp - 2 * curr_hp ) * (catch_rate * ball_modifier) / (3 * max_hp) ) * status_modifier
+
+p_shake <- function(x)
+  ifelse(
+    x < 255, # check if x < 255 element wise
+    (65535 * sqrt(sqrt(x / 255)) * 2^-16), # if so compute probability of success with formula
+    1 # otherwise success
+  )
+
+pokemon <- read_csv("pokemon.csv") %>%
+  filter(name != "Minior") %>%
+  mutate(
+    katakana_name = japanese_name %>% str_extract(r"([^[a-zA-Z0-9?]]+)"),
+    romaji_name = japanese_name %>% str_extract(r"([a-zA-Z0-9?]+)"),
+    capture_rate = as.numeric(capture_rate),
+    p_catch_min = catch_value(hp, hp, capture_rate) %>% p_shake() %>% pgeom(2, .),
+    p_catch_max = catch_value(hp, 1, capture_rate) %>% p_shake() %>% pgeom(2, .),
+    japanese_name = NULL
+  )
+
+ggplot(pokemon, aes(capture_rate, p_catch_min)) +
+  geom_point() +
+  labs(x = "Catch Rate", y = "Minimum Probability of Capture")
+```
+
+
+This can be shown in the following diagnostics for a model with the formula.
+
+```{r}
+#| echo: false
+#| warning: false
+lm1 <- lm(
+  p_catch_min ~ poly(sqrt(sqrt(capture_rate)), 3, raw = T),
+  data = pokemon
+)
+
+summary(lm1)
+
+plot(lm1, which = 1:2)
+```
+
+
+# Data Description
+The dataset used was "The Complete Pokemon Dataset" from Kaggle user Rounak Banik, who scraped data from serebii.net on Pokemon up to Generation 7.
+
+The dataset has 41 columns and 801 rows.
+
+The relevent columns to this project are:
+
+* `name`
+
+  This is a column of strings. Each value is the official English name of the Pokemon.
+
+* `capture_rate`
+
+  This is a column of unsigned 8-bit integers used to calculate the probability of a capture.
+
+# Results
+The model can be more effectively tested by splitting the data into test and train subsets.
+
+```{r}
+#| echo: false
+df <- pokemon %>%
+  select(name, pokedex_number, capture_rate, p_catch_min, p_catch_max)
+
+set.seed(0)
+train <- df %>%
+  slice_sample(prop = 0.7)
+
+test <- df %>%
+  anti_join(
+    train,
+    by = "pokedex_number"
+  )
+```
+
+After fitting a linear model with the training data and testing it, we get the following summary of the Residual Vector.
+
+```{r}
+#| echo: false
+
+lm_train <- lm(
+  p_catch_min ~ poly(sqrt(sqrt(capture_rate)), 3, raw = T),
+  data = train
+)
+
+test_pred <- predict(
+  lm_train,
+  test
+)
+
+(test_pred - test$p_catch_min) %>%
+  summary()
+```
+
+This seems to indicate that the model is extremely accurate. Now these models only estimate the minimum probabilities of capture for pokemon.
+
+<!-- might be able to ignore -->
+
+Another detail is that when fitting all models, one Pokemon had to be omitted. This was Minior. The reason Minior was omitted is because they have two phases. Each phase has it's own capture rate while the other stats remain the same. In its Meteorite Phase, Minior has a capture rate of 30, which is below the first quartile. When Minior is in its Core Phase, it has a capture rate of 255, which is the maximum value for capture rate. Since the capture rate can take either value, I decided to omit it.
+
+Overall, this approximation seems to accurately predict the minimum probability of a successful capture. This is useful as the minimum value cannot decrease based on the health of the pokemon, with the exception of a faint. It can also be combined with an estimate for higher bound in order to give a helpful interval of the probability of capture.

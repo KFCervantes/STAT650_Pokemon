@@ -1,0 +1,91 @@
+---
+title: "ggplot"
+output: html_document
+date: "2022-10-06"
+---
+
+```{r}
+unique(pokemon_1$type1)
+```
+
+```{r}
+grass = filter(pokemon_1, type1 == "grass")
+fire = filter(pokemon_1, type1 == "fire")
+water = filter(pokemon_1, type1 == "water")
+bug = filter(pokemon_1, type1 == "bug")
+normal = filter(pokemon_1, type1 == "normal")
+poison = filter(pokemon_1, type1 == "poison")
+electric = filter(pokemon_1, type1 == "electric")
+ground = filter(pokemon_1, type1 == "ground")
+fighting = filter(pokemon_1, type1 == "fighting")
+psychic = filter(pokemon_1, type1 == "psychic")
+rock = filter(pokemon_1, type1 == "rock")
+ghost = filter(pokemon_1, type1 == "ghost")
+dragon = filter(pokemon_1, type1 == "dragon")
+dark = filter(pokemon_1, type1 == "dark")
+```
+
+
+hp<-qplot(x =x, fill=..count.., geom="histogram") 
+hp
+# Sequential color scheme
+hp+scale_fill_gradient(low="blue", high="red")
+
+```{r}
+test <- qplot(x = grass, fill = ..count.., geom = "histogram")
+test
+```
+
+```{r}
+gen_grass <- ggplot(grass, aes(generation, fill = ..count..)) + 
+  geom_histogram(stat = "count") + ggtitle("Grass") + 
+  scale_fill_gradient(low = "black", high = "green")
+gen_fire <- ggplot(fire, aes(generation, fill = ..count..)) + 
+  geom_histogram(stat = "count") + ggtitle("Fire") + 
+  scale_fill_gradient(low="black", high="red")
+gen_water <- ggplot(water, aes(generation, fill = ..count..)) + 
+  geom_histogram(stat = "count") + ggtitle("water") + 
+  scale_fill_gradient(low="black", high="blue")
+gen_electric <- ggplot(electric, aes(generation, fill = ..count..)) + 
+  geom_histogram(stat = "count") + ggtitle("Electric") + 
+  scale_fill_gradient(low="black", high="yellow")
+gen_bug <- ggplot(bug, aes(generation, fill = ..count..)) + 
+  geom_histogram(stat = "count") + ggtitle("Bug") + 
+  scale_fill_gradient(low="black", high="brown")
+gen_normal <- ggplot(normal, aes(generation, fill = ..count..)) + 
+  geom_histogram(stat = "count") + ggtitle("Normal") + 
+  scale_fill_gradient(low="black", high="lightblue")
+gen_ground <- ggplot(ground, aes(generation, fill = ..count..)) + 
+  geom_histogram(stat = "count") + ggtitle("Ground") + 
+  scale_fill_gradient(low="black", high="brown")
+gen_fighting <- ggplot(fighting, aes(generation, fill = ..count..)) + 
+  geom_histogram(stat = "count") + ggtitle("Fighting") + 
+  scale_fill_gradient(low="black", high="lightblue")
+gen_psychic <- ggplot(psychic, aes(generation, fill = ..count..)) + 
+  geom_histogram(stat = "count") + ggtitle("Psychic") + 
+  scale_fill_gradient(low="black", high="violet")
+gen_rock <- ggplot(rock, aes(generation, fill = ..count..)) + 
+  geom_histogram(stat = "count") + ggtitle("Rock") + 
+  scale_fill_gradient(low="black", high="grey")
+gen_ghost <- ggplot(ghost, aes(generation, fill = ..count..)) + 
+  geom_histogram(stat = "count") + ggtitle("Ghost") + 
+  scale_fill_gradient(low="black", high="white")
+gen_dragon <- ggplot(dragon, aes(generation, fill = ..count..)) + 
+  geom_histogram(stat = "count") + ggtitle("Dragon") + 
+  scale_fill_gradient(low="black", high="orange")
+gen_dark <- ggplot(dark, aes(generation, fill = ..count..)) + 
+  geom_histogram(stat = "count") + ggtitle("Dark") + 
+  scale_fill_gradient(low="black", high="purple")
+gen_poison <- ggplot(poison, aes(generation, fill = ..count..)) + 
+  geom_histogram(stat = "count") + ggtitle("Poison") + 
+  scale_fill_gradient(low="black", high="purple")
+
+```
+
+
+```{r}
+grid.arrange(gen_fire, gen_water, gen_grass, gen_electric, gen_dragon, 
+             gen_rock, gen_bug, gen_ghost, gen_poison, gen_ground, 
+             gen_psychic, gen_dark, gen_normal, ncol=4)
+```
+

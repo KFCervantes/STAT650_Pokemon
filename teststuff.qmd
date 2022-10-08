@@ -1,0 +1,131 @@
+---
+title: "Untitled"
+format: pdf
+---
+
+```{r}
+library(tidyverse)
+```
+
+For the most part, the data is tidy. There are a few columns that are exceptions.
+
+`abilities` is a list of abilities the pokemon has.
+
+`japanese_name` is actually the japanese ways represented in romaji and then katakana.
+
+`capture_rate` has one row with multiple values. This has resulted in the entire column being encoded as a string.
+
+For the Japanese names, we can use the following cell to split the column into two different ones.
+
+```{r}
+pokemon <- read_csv("pokemon.csv") %>%
+  mutate(
+    katakana_name = japanese_name %>% str_extract(r"([^[a-zA-Z0-9?]]+)"),
+    romaji_name = japanese_name %>% str_extract(r"([a-zA-Z0-9?]+)"),
+    .keep = "unused"
+  )
+```
+
+It may help to see the case where `capture_rate` can't be encoded into an integer.
+̛
+```{r}
+pokemon %>%
+  filter(capture_rate %>% str_detect(r"( )")) %>%
+  select(
+    contains("name"),
+    contains("type"),
+    generation,
+    is_legendary,
+    capture_rate,
+    hp
+  )
+```
+
+Here, this is due to the gen 7 pokemon Minior having two different caputure rates depending on an item that can be equipped.
+
+```{r}
+pokemon %>%
+  filter(name != "Minior") %>%
+  mutate(capture_rate = as.numeric(capture_rate))
+```
+
+According to the [site where the data was scraped](https://www.serebii.net/games/capture.shtml), we have the following functions to calculate whether or not the pokemon is captured.
+
+```{r}
+catch_value <- function(max_hp, curr_hp, catch_rate, ball_modifier = 1, status_modifier = 1)
+   (( 3 * max_hp - 2 * curr_hp ) * (catch_rate * ball_modifier) / (3 * max_hp) ) * status_modifier
+
+catch <- function(x) {
+  1048560 / sqrt(sqrt(16711680 / x))
+}
+```
+
+If `catch_value` returns 255 or higher, then the pokemon is caught. Otherwise, `catch` is applied to the returned value of `catch_value` and then a random number is generated. If the random number is bigger than catch, the pokemon is caught. Now it may help to see what the values of `catch` can be.
+
+```{r}
+0:255 %>%
+  {ggplot(mapping = aes(., catch(.)))} +
+  geom_point() +
+  labs(
+    x = "Catch Value",
+    y = "Catch"
+  )
+
+catch(0:255) %>%
+  summary()
+```
+
+Here, the values seem to be in the range of a 16-bit unsigned integer. Given the output of `catch`, the event where a pokemon is captured follows a bernoulli distribution with probability of success that is the output of `catch` divided by $2^16$.
+
+A probability of success vector function will be made.
+
+```{r}
+p_catch <- function(x)
+  ifelse(
+    x < 255, # check if x < 255 element wise
+    (65535 * sqrt(sqrt(x / 255)) * 2^-16), # if so compute probability of success with formula
+    1 # otherwise success
+  )
+```
+
+I now use this to compute the minimum and maximum probabilities of capture for the pokemon and subset the dataframe to be more tidy.
+
+
+```{r}
+prob_df <- pokemon %>%
+  select(
+    !starts_with(c("against", "type")),
+    -abilities
+  ) %>%
+  filter(name != "Minior") %>%
+  mutate(
+    capture_rate = as.numeric(capture_rate),
+    p_catch_min = catch_value(hp, hp, capture_rate) %>% p_catch(),
+    p_catch_max = catch_value(hp, 1, capture_rate) %>% p_catch()
+  )
+
+summary(prob_df)
+
+ggplot(prob_df) +
+  geom_point(aes(hp, p_catch_min), color = "green", alpha = 0.25) +
+  geom_point(aes(hp, p_catch_max), color = "red", alpha = 0.25) +
+  labs(
+    title = "min = green, max = red",
+    x = "Max HP",
+    y = "Probability of Capture"
+  )
+```
+
+It may help to look at the minimum and maximum probabilities of capture.
+
+```{r}
+ggplot(prob_df, aes(p_catch_min, p_catch_max)) +
+  geom_point() +
+  labs(
+    x = "Minimum Probability of Capture",
+    y = "Maximum Probability of Capture"
+  )
+```
+
+This seems to indicate that the exteme values for probability of capture have a strong linear relationship.
+

@@ -1,0 +1,208 @@
+---
+title: "Data Cleaning and Description"
+output: pdf_document
+date: "`r Sys.Date()`"
+---
+
+The purpose of this document is to show how the data will be cleaned for the actual paper and provide a longer description that will be condensed for the submitted paper.
+
+Since the class mostly focused on `tidyverse`, I used those functions for all data cleaning and subsetting.
+
+```{r, warning=FALSE, message=FALSE}
+library(tidyverse)
+```
+
+# Source
+The dataset used was "The Complete Pokemon Dataset" from Kaggle user Rounak Banik. The data contains information on pokemon from the game *Pokemon Go*. The data technically isn't complete Pokemon dataset as it is limited to the Pokemon that were already introduced in and before 2017.
+
+# Cleaning
+ I decided to clean the data based on the following:
+
+* combat type modifiers will be removed
+
+* the resulting tibble should be in a tidy format
+
+  This means that entries with multiple values are removed or simplified.
+
+* only one unique identifier column is needed
+
+* columns that are linear combinations of others will be removed
+
+* categorical variables should be stored as factors with up to 15 different levels
+
+  This is due to how some packages have trouble working with more than 15 levels.
+
+```{r, message=FALSE}
+pokemon <- read_csv("pokemon.csv") %>%
+  select(
+    !contains("against"),
+    -c(abilities, japanese_name, pokedex_number, base_total)
+  ) %>%
+  filter(name != "Minior") %>%
+  mutate(
+    capture_rate = as.numeric(capture_rate),
+    classification = classfication %>% str_extract(r"([:alpha:]+(?= Pok))") %>% fct_lump_n(8),
+    type1 = type1 %>% fct_lump_n(14),
+    type2 = type2 %>% fct_explicit_na("None") %>% fct_lump_n(13),
+    generation = as.factor(generation),
+    is_legendary = as.logical(is_legendary),
+    .keep = "unused"
+  )
+```
+
+The cleaned dataset will be stored in the file `cleaned_pokemon.csv`.
+
+```{r}
+pokemon %>% write_csv("cleaned_pokemon.csv")
+```
+
+
+# Description
+
+The resulting tibble has the following columns
+
+* `attack`, `defense`, `speed`, `hp`, `sp_attack`, `sp_defense`
+
+  Numeric columns representing attributes used in combat.
+  
+* `base_egg_steps`, `base_happiness`
+
+  Numeric columns representing base values for Pokemon attributes.
+  
+* `capture_rate`
+
+  8-bit integer column that is used to calculate the probability that a Pokemon is caught.
+  
+* `height_m`
+
+  Numeric column representing the height of the Pokemon in meters.
+  
+* `name`
+
+  Character column containing the Pokemon's official English name. This is also a unique identifier.
+  
+* `percentage_male`
+
+  Numeric column representing the percent of the pokemon of a species that are male. Pokemon species without sex have `NA` values in this column.
+  
+* `type1`, `type2`
+
+  Character columns representing the primary and secondary types of the pokemon respectively.
+  
+* `weight_kg`
+
+  Numeric column representing the weight of the Pokemon in kg.
+  
+* `generation`
+
+  Factor representing the generation in which the Pokemon was introduced. This dataset only contains up to Generation 7 (i.e. Pokemon from *Ultra Sun*, *Ultra Moon*, and previous titles).
+  
+* `is_legendary`
+
+  Logical column that is true when the Pokemon is legendary and false otherwise.
+
+* `classification`, `experience_growth`
+
+  I am still not sure what these do.
+
+# Basic Additive Step Model
+In order to find which predictors may be important, I decided to use a basic additive step model with AIC as the metric. In order to avoid issues for this, incomplete rows were removed.
+
+```{r}
+lm1 <- lm(
+  capture_rate ~ . - name,
+  data = pokemon %>% drop_na()
+) %>%
+  step(trace = 0)
+
+summary(lm1)
+```
+
+This does not have a particularly good $R^2$. It may also help to look at diagnostic plots.
+
+```{r}
+plot(lm1, which = 1:2)
+```
+
+There seems to be some clear lines in the residuals. Fortunately, the residuals do appear to be normally distributed.
+
+# Visualization
+The following plot tries to show how many of each type of pokemon were introduced in each generation.
+
+```{r}
+ggplot(
+  pokemon,
+  aes(y = generation, fill = type1)
+) +
+  geom_bar()
+```
+
+```{r}
+ggplot(
+  pokemon,
+  aes(y = type1, fill = generation)
+) +
+  geom_bar(position = "fill")
+```
+
+# Anova Models
+It may also help to test out some ANOVA models to see the if there are significant differences in capture rate between different categorical variables.
+
+To do this, I decided to subset the dataset to only include categorical variables as well as the response.
+
+```{r}
+anova_data <- pokemon %>%
+  select(
+    capture_rate,
+    !where(is.numeric)
+  )
+```
+
+In order to figure out which categorical variables had an effect on `capture_rate`, we tested a model that used types, generation, legendary status, and classification. Since primary and secondary types are both types, their interaction was considered.
+
+```{r}
+aov1 <- aov(
+  capture_rate ~ type1 * type2 + generation + is_legendary + classification,
+  anova_data
+)
+
+summary(aov1)
+plot(aov1, which = 1)
+car::powerTransform(aov1) %>% summary()
+```
+
+The summary from this model seemed to indicate that the interaction between primary and secondary types was not significant. It also seemed to indicate that classification was also not a significant factor.
+
+From here, a reduced model was used.
+
+```{r}
+aov2 <- aov(
+  capture_rate ~ type1 + type2 + generation + is_legendary,
+  anova_data
+)
+
+summary(aov2)
+plot(aov2, which = 1:2)
+```
+
+In the reduced model, all factors were significant. In the diagnostic plots from both, the QQPlots seemed close to normal. When box-cox tests were used, small powers in the range of 0.02 to 0.12 were recommended for transformation. Both seemed to violate the constant variance assumption for ANOVA. As such, the results may not be valid.
+
+In order to visualize some differences, it may help to use plots.
+
+```{r}
+ggplot(pokemon, aes(capture_rate, type1)) + geom_boxplot()
+
+ggplot(pokemon, aes(capture_rate, type2)) + geom_boxplot()
+
+ggplot(pokemon, aes(capture_rate, generation)) + geom_boxplot()
+
+ggplot(pokemon, aes(capture_rate, is_legendary)) + geom_boxplot()
+
+ggplot(pokemon, aes(capture_rate, classification)) + geom_boxplot()
+```
+
+
+# Additional Notes
+By default, Hoopa has classification "Mischief Pokémon (Confined)Djinn Pokémonn (Unbound)". When cleaning the classfication column, the regular expression used extracted "Mischief". This can be changed if needed.
+
+The Pokemon Minior has two different values for `capture_rate` depending on its form. Since it has multiple values for the response variable, I decided to omit it.
